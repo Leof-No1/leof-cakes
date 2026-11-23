@@ -37,7 +37,7 @@ const products = [
   { id: "croissantbophap", name: "Croissant Bơ Pháp", category: "Bánh mì & Viennoiserie", weight: "80g", price: 55000, rating: 5, reviews: 211, tags: ["Nổi bật"], quick: ["Bán chạy nhất"] },
   { id: "MacaronHongCanhSen", name: "Bánh Macaron Hồng Cánh Sen", category: "Bánh nhỏ & Pastry", weight: "30g/cái", price: 85000, rating: 5, reviews: 124, tags: ["Nổi bật", "Mới"], quick: ["Mới nhất"] },
   { id: "opera", name: "Opera Cake Cổ Điển", category: "Bánh nguyên cái", weight: "500g (6-8 phần)", price: 320000, rating: 5, reviews: 89, tags: ["Nổi bật"], quick: ["Bán chạy nhất"] },
-  { id: "TartChanhLeoTuoi", name: "Tart Chanh Leo Tươi", category: "Tart & Quiche", weight: "150g", price: 145000, rating: 5, reviews: 67, tags: ["Nổi bật"], quick: ["Mới nhất"] },
+  { id: "TartChanhLeoTuoi", name: "Tart Chanh Leo Tươi", category: "Tart & Quiche", weight: "150g", price: 145000, rating: 5, reviews: 67, tags: ["Theo mùa", "Nổi bật"], quick: ["Mới nhất"] },
   { id: "Mousse", name: "Bánh mousse", category: "Bánh nguyên cái", weight: "700g", price: 275000, rating: 5, reviews: 56, tags: ["Theo mùa", "Mới"], quick: ["Đang giảm"] },
   { id: "TiramisuMongNgotNhe", name: "Tiramisu Mọng Ngọt Nhẹ", category: "Bánh nhỏ & Pastry", weight: "120g", price: 99000, rating: 5, reviews: 77, tags: ["Theo mùa"], quick: ["Đang giảm"] },
   { id: "BanhMiBoToi", name: "Bánh Mì Bơ Tỏi", category: "Bánh mì & Viennoiserie", weight: "180g", price: 69000, rating: 4, reviews: 43, tags: ["Mới"], quick: ["Mới nhất"] },
