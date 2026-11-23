@@ -1825,7 +1825,15 @@ syncFromDatabase();
 setInterval(() => {
   if (state.route === "home") {
     state.slide = (state.slide + 1) % 3;
-    render();
+    const titles = ["Nghệ Thuật Từ Bếp Bánh", "Đặt Bánh Sinh Nhật", "Tinh Tế Cho Mỗi Dịp"];
+    document.querySelectorAll(".hero-slide").forEach((el, i) => {
+      el.classList.toggle("active", i === state.slide);
+    });
+    document.querySelectorAll(".hero-dots button").forEach((el, i) => {
+      el.classList.toggle("active", i === state.slide);
+    });
+    const heroHeading = document.querySelector(".hero-content h1");
+    if (heroHeading) heroHeading.textContent = titles[state.slide];
   }
 }, 4800);
 
