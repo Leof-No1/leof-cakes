@@ -641,7 +641,7 @@ function getOrderStatusInfo(status) {
   const map = {
     pending: { label: "Chờ xác nhận", cls: "status-pending", step: 1 },
     cancel_requested: { label: "Chờ duyệt hủy", cls: "status-cancel-req", step: 1 },
-    baking: { label: "Đang làm bánh", cls: "status-baking", step: 2 },
+    baking: { label: "Đang chuẩn bị bánh", cls: "status-baking", step: 2 },
     shipping: { label: "Đang giao hàng", cls: "status-shipping", step: 3 },
     completed: { label: "Hoàn thành", cls: "status-completed", step: 4 },
     cancelled: { label: "Đã hủy", cls: "status-cancelled", step: 0 },
@@ -923,7 +923,7 @@ function renderAdmin() {
                     <select class="admin-select" data-action="admin-status" data-code="${order.orderCode}">
                       <option value="pending" ${order.status === "pending" ? "selected" : ""}>Chờ xác nhận</option>
                       <option value="cancel_requested" ${order.status === "cancel_requested" ? "selected" : ""}>Chờ duyệt hủy</option>
-                      <option value="baking" ${order.status === "baking" ? "selected" : ""}>Đang làm bánh</option>
+                      <option value="baking" ${order.status === "baking" ? "selected" : ""}>Đang chuẩn bị bánh</option>
                       <option value="shipping" ${order.status === "shipping" ? "selected" : ""}>Đang giao hàng</option>
                       <option value="completed" ${order.status === "completed" ? "selected" : ""}>Hoàn thành</option>
                       <option value="cancelled" ${order.status === "cancelled" ? "selected" : ""}>Đã hủy</option>
