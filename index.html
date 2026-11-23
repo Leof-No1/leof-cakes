@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LEOF Cakes</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@200;300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#home" aria-label="LEOF Cakes">
+        <span>LEOF</span>
+        <small>CAKES</small>
+      </a>
+      <nav class="main-nav" aria-label="Điều hướng chính">
+        <a href="#home" data-route="home">Trang chủ</a>
+        <a href="#shop" data-route="shop">Các loại bánh</a>
+        <a href="#about" data-route="about">Giới thiệu</a>
+        <a href="#news" data-route="news">Tin tức</a>
+      </nav>
+      <div class="header-actions">
+        <button class="icon-button" data-action="go-shop" aria-label="Tìm kiếm">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+        </button>
+        <a class="icon-button" href="#wishlist" aria-label="Danh sách yêu thích">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"></path></svg>
+        </a>
+        <button class="icon-button cart-trigger" data-action="open-cart" aria-label="Giỏ hàng">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l-1 12H7L6 8Z"></path><path d="M9 8a3 3 0 0 1 6 0"></path></svg>
+          <span class="badge" id="cartBadge">0</span>
+        </button>
+        <button class="icon-button user-trigger" id="userTrigger" data-action="go-account" aria-label="Tài khoản">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
+          <span class="user-dot" id="userDot"></span>
+        </button>
+      </div>
+    </header>
+
+    <main id="app"></main>
+
+    <aside class="cart-drawer" id="cartDrawer" aria-hidden="true">
+      <div class="drawer-panel" role="dialog" aria-modal="true" aria-label="Giỏ hàng">
+        <div class="drawer-head">
+          <h2>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12l-1 12H7L6 8Z"></path><path d="M9 8a3 3 0 0 1 6 0"></path></svg>
+            Giỏ hàng <span id="drawerCount">0</span>
+          </h2>
+          <button class="close-button" data-action="close-cart" aria-label="Đóng giỏ hàng">×</button>
+        </div>
+        <div class="drawer-items" id="drawerItems"></div>
+        <div class="drawer-foot">
+          <div class="subtotal"><span>Tạm tính:</span><strong id="drawerSubtotal">0 đ</strong></div>
+          <p>Phí giao hàng sẽ được tính khi thanh toán</p>
+          <button class="primary full" data-action="checkout">Tiến hành thanh toán</button>
+          <button class="ghost full" data-action="view-cart">Tiếp tục mua hàng</button>
+        </div>
+      </div>
+    </aside>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
