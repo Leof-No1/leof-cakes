@@ -13,6 +13,14 @@ const BANK_CONFIG = {
 const SUPABASE_URL = "https://ojzpvftearmlbsxugztb.supabase.co";
 const SUPABASE_KEY = "sb_publishable_cw49MfOWBiQ9TcFvlisOxg_sdo4qNnH";
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const sb = db;
+
+// Trạng thái form Thêm / Sửa bánh trong trang Admin
+let editingCakeId = null;
+let showCakeForm = false;
+let vouchersList = [];
+let editingVoucherId = null;
+let showVoucherForm = false;
 
 function productImage(product) {
   return product?.image || `${ASSET_DIR}/${product.id}.jpg`;
@@ -100,10 +108,47 @@ const state = {
   adminCustomerSearch: "",
   lastOrderCode: "",
   pendingBankOrder: null,
+  appliedVoucher: null,
+  voucherInput: "",
+  voucherFeedback: "",
 };
 
 const app = document.querySelector("#app");
 const drawer = document.querySelector("#cartDrawer");
+
+// ==========================================
+// TẢI DANH SÁCH SẢN PHẨM TỪ SUPABASE
+// ==========================================
+async function reloadProductsFromSupabase(allowEmpty = false) {
+  try {
+    const { data, error } = await sb
+      .from("sanpham")
+      .select("*")
+      .order("ngay_tao", { ascending: false });
+
+    if (!error && Array.isArray(data) && (data.length > 0 || allowEmpty)) {
+      const mapped = data.map((sp) => ({
+        id: sp.ma_sp,
+        name: sp.ten_sp,
+        category: sp.loai || "Bánh ngọt",
+        ma_dm: sp.ma_dm || "DM01",
+        weight: sp.trong_luong || "",
+        price: Number(sp.gia) || 0,
+        rating: 5,
+        reviews: 0,
+        tags: Array.isArray(sp.nhan_sp) ? sp.nhan_sp : [],
+        quick: Array.isArray(sp.nhan_sp) && sp.nhan_sp.includes("Mới") ? ["Mới nhất"] : ["Bán chạy nhất"],
+        image: sp.anh_sp || "./public/assets/placeholder.jpg",
+        description: sp.mo_ta_chi_tiet || "",
+        trang_thai: sp.trang_thai || "selling",
+      }));
+      products.length = 0;
+      products.push(...mapped);
+    }
+  } catch (err) {
+    console.error("Lỗi tải danh sách bánh:", err);
+  }
+}
 
 // ==========================================
 // ĐỒNG BỘ DỮ LIỆU VỚI SUPABASE DATABASE
@@ -149,6 +194,8 @@ async function syncFromDatabase() {
       }));
     }
 
+    await reloadProductsFromSupabase();
+    await reloadVouchersFromSupabase();
     render();
   } catch (err) {
     console.error("Lỗi đồng bộ Supabase:", err);
@@ -197,12 +244,12 @@ function setRoute(route) {
 }
 
 function productLabels(product) {
-  return product.tags.map((tag) => `<span class="label ${tag === "Mới" ? "new" : tag === "Theo mùa" ? "season" : ""}">${tag}</span>`).join("");
+  return (product.tags || []).map((tag) => `<span class="label ${tag === "Mới" ? "new" : tag === "Theo mùa" ? "season" : ""}">${tag}</span>`).join("");
 }
 
 function productCard(product) {
   const loved = state.wishlist.has(product.id);
-  const stars = "★".repeat(product.rating) + "☆".repeat(5 - product.rating);
+  const stars = "★".repeat(product.rating || 5) + "☆".repeat(5 - (product.rating || 5));
   return `
     <article class="product-card">
       <a class="product-image product-link" href="#product/${product.id}" aria-label="Xem chi tiết ${product.name}">
@@ -211,9 +258,9 @@ function productCard(product) {
       </a>
       <div class="product-body">
         <h3><a class="product-title-link" href="#product/${product.id}">${product.name}</a></h3>
-        <div class="weight">${product.weight}</div>
+        <div class="weight">${product.weight || ""}</div>
         <div class="rating-row">
-          <span class="stars">${stars} <span class="muted">(${product.reviews})</span></span>
+          <span class="stars">${stars} <span class="muted">(${product.reviews || 0})</span></span>
           <button class="heart ${loved ? "active" : ""}" data-action="toggle-wish" data-id="${product.id}" aria-label="Yêu thích ${product.name}">
             <svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"></path></svg>
           </button>
@@ -233,7 +280,7 @@ function renderProductDetail(id) {
   const product = products.find((item) => item.id === id) || products[0];
   const loved = state.wishlist.has(product.id);
   const related = products.filter((item) => item.id !== product.id && item.category === product.category).concat(products.filter((item) => item.id !== product.id)).slice(0, 3);
-  const sold = product.reviews * 4 + 24;
+  const sold = (product.reviews || 10) * 4 + 24;
   return `
     <section class="product-detail">
       <nav class="breadcrumbs" aria-label="Đường dẫn">
@@ -244,10 +291,10 @@ function renderProductDetail(id) {
           <img src="${productImage(product)}" onerror="handleImgError(this, '${product.id}')" alt="${product.name}" />
         </div>
         <div class="detail-info">
-          <div class="detail-tags">${product.tags.map((tag) => `<span class="detail-tag">${tag === "Nổi bật" ? "✦ " : "✨ "}${tag}</span>`).join("")}</div>
+          <div class="detail-tags">${(product.tags || []).map((tag) => `<span class="detail-tag">${tag === "Nổi bật" ? "✦ " : "✨ "}${tag}</span>`).join("")}</div>
           <h1>${product.name}</h1>
-          <p class="detail-weight">${product.weight}</p>
-          <div class="detail-rating"><span class="stars">★★★★★</span><strong>4.8</strong><span>(${product.reviews} đánh giá)</span><span>·</span><span>${sold} đã bán</span></div>
+          <p class="detail-weight">${product.weight || ""}</p>
+          <div class="detail-rating"><span class="stars">★★★★★</span><strong>4.8</strong><span>(${product.reviews || 0} đánh giá)</span><span>·</span><span>${sold} đã bán</span></div>
           <div class="detail-price">${formatPrice(product.price)}</div>
           <div class="flavor-box">
             <strong>Hương vị nổi bật</strong>
@@ -277,7 +324,7 @@ function renderProductDetail(id) {
           <button class="outline-button full" data-action="detail-buy-now" data-id="${product.id}">Mua ngay</button>
           <div class="detail-copy">
             <h2>Mô tả</h2>
-            <p>${product.name} được làm thủ công với nguyên liệu tuyển chọn, giữ vị ngọt thanh và hương thơm đặc trưng cho từng dịp thưởng thức.</p>
+            <p>${product.description || `${product.name} được làm thủ công với nguyên liệu tuyển chọn, giữ vị ngọt thanh và hương thơm đặc trưng cho từng dịp thưởng thức.`}</p>
             <h2>Thành phần</h2>
             <p>Bột mì, bơ Président, trứng, sữa tươi, đường bột và hương liệu tự nhiên theo từng dòng bánh.</p>
           </div>
@@ -332,7 +379,7 @@ function benefitIcon(type) {
 
 function renderHome() {
   const featured = products.slice(0, 4);
-  const seasonal = products.filter((p) => p.tags.includes("Theo mùa")).slice(0, 4);
+  const seasonal = products.filter((p) => (p.tags || []).includes("Theo mùa")).slice(0, 4);
   return `
     <section class="hero">
       ${["Nghệ Thuật Từ Bếp Bánh", "Đặt Bánh Sinh Nhật", "Tinh Tế Cho Mỗi Dịp"].map((title, index) => `
@@ -388,7 +435,7 @@ function renderHome() {
 function filteredProducts() {
   return products
     .filter((p) => state.category === "Tất cả" || p.category === state.category)
-    .filter((p) => state.quick === "Tất cả" || p.quick.includes(state.quick) || p.tags.includes(state.quick.replace("Mới nhất", "Mới")))
+    .filter((p) => state.quick === "Tất cả" || (p.quick || []).includes(state.quick) || (p.tags || []).includes(state.quick.replace("Mới nhất", "Mới")))
     .filter((p) => !state.search || p.name.toLowerCase().includes(state.search.toLowerCase()))
     .filter((p) => !state.min || p.price >= Number(state.min))
     .filter((p) => !state.max || p.price <= Number(state.max))
@@ -852,6 +899,263 @@ function renderAccount() {
 }
 
 // ==========================================
+// HÀM XỬ LÝ THÊM / SỬA / XÓA BÁNH CỦA ADMIN
+// ==========================================
+function openCakeEditor(id = null) {
+  editingCakeId = id;
+  showCakeForm = true;
+  render();
+}
+
+function closeCakeEditor() {
+  editingCakeId = null;
+  showCakeForm = false;
+  render();
+}
+
+async function handleSaveCake(e) {
+  e.preventDefault();
+  const ten_sp = document.getElementById("adminCakeName").value.trim();
+  const loai = document.getElementById("adminCakeCategory").value;
+  const trong_luong = document.getElementById("adminCakeWeight").value.trim();
+  const gia = Number(document.getElementById("adminCakePrice").value) || 0;
+  const mo_ta_chi_tiet = document.getElementById("adminCakeDesc").value.trim();
+  const nhan_sp = document.getElementById("adminCakeTags").value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  let anh_sp = document.getElementById("adminCakeImgUrl").value.trim() || "./public/assets/placeholder.jpg";
+  const fileInput = document.getElementById("adminCakeImgFile");
+
+  if (fileInput && fileInput.files && fileInput.files[0]) {
+    const file = fileInput.files[0];
+    const ext = file.name.split(".").pop();
+    const path = `products/${Date.now()}.${ext}`;
+    const { error: upErr } = await sb.storage.from("leof-images").upload(path, file, { upsert: true });
+    if (upErr) {
+      alert("Lỗi tải ảnh: " + upErr.message);
+      return;
+    }
+    const { data: pub } = sb.storage.from("leof-images").getPublicUrl(path);
+    if (pub?.publicUrl) anh_sp = pub.publicUrl;
+  }
+
+  const dmMap = {
+    "Bánh mì & Viennoiserie": "DM01",
+    "Bánh nhỏ & Pastry": "DM02",
+    "Bánh nguyên cái": "DM03",
+    "Tart & Quiche": "DM04",
+  };
+
+  const payload = {
+    ma_dm: dmMap[loai] || "DM01",
+    ten_sp,
+    loai,
+    trong_luong,
+    gia,
+    nhan_sp,
+    anh_sp,
+    mo_ta_chi_tiet,
+    trang_thai: "selling",
+  };
+
+  if (editingCakeId) {
+    const { error } = await sb.from("sanpham").update(payload).eq("ma_sp", editingCakeId);
+    if (error) return alert("Lỗi cập nhật: " + error.message);
+    alert("Đã cập nhật thông tin bánh!");
+  } else {
+    const ma_sp = "SP_" + Date.now();
+    const { error } = await sb.from("sanpham").insert({ ma_sp, ...payload });
+    if (error) return alert("Lỗi thêm bánh: " + error.message);
+    await sb.from("tonkho").insert({ ma_kho: "KHO01", ma_sp, so_luong_ton: 30 });
+    alert("Đã thêm bánh mới!");
+  }
+
+  editingCakeId = null;
+  showCakeForm = false;
+  await reloadProductsFromSupabase(true);
+  render();
+}
+
+async function handleDeleteCake(id, name) {
+  if (!confirm(`Bạn có chắc muốn xóa bánh "${name}" không?`)) return;
+  const { error } = await sb.from("sanpham").delete().eq("ma_sp", id);
+  if (error) {
+    alert("Không thể xóa bánh này vì đã có trong lịch sử đơn hàng!");
+    return;
+  }
+  await reloadProductsFromSupabase(true);
+  alert("Đã xóa bánh thành công!");
+  render();
+}
+
+// ==========================================
+// HÀM XỬ LÝ KHUYẾN MÃI & MÃ GIẢM GIÁ
+// ==========================================
+async function reloadVouchersFromSupabase() {
+  try {
+    const { data, error } = await sb
+      .from("khuyenmai")
+      .select("*")
+      .order("ngay_bat_dau", { ascending: false });
+
+    if (!error && Array.isArray(data)) {
+      vouchersList = data;
+    }
+  } catch (err) {
+    console.error("Lỗi tải khuyến mãi:", err);
+  }
+}
+
+function toLocalDateInput(dateInput) {
+  const d = dateInput ? new Date(dateInput) : new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+function openVoucherEditor(ma_km = null) {
+  editingVoucherId = ma_km;
+  showVoucherForm = true;
+  render();
+}
+
+function closeVoucherEditor() {
+  editingVoucherId = null;
+  showVoucherForm = false;
+  render();
+}
+
+async function handleSaveVoucher(e) {
+  e.preventDefault();
+  const ma_code = document.getElementById("adminKmCode").value.trim().toUpperCase();
+  const ten_km = document.getElementById("adminKmName").value.trim();
+  const loai_giam = document.getElementById("adminKmType").value;
+  const gia_tri_giam = Number(document.getElementById("adminKmVal").value) || 0;
+  const don_toi_thieu = Number(document.getElementById("adminKmMin").value) || 0;
+  const so_luot_toi_da = Number(document.getElementById("adminKmLimit").value) || 100;
+  const startDateStr = document.getElementById("adminKmStart").value;
+  const endDateStr = document.getElementById("adminKmEnd").value;
+
+  if (startDateStr && endDateStr && new Date(endDateStr) < new Date(startDateStr)) {
+    return alert("Ngày kết thúc không được nhỏ hơn ngày bắt đầu!");
+  }
+
+  const ngay_bat_dau = startDateStr
+    ? new Date(startDateStr + "T00:00:00").toISOString()
+    : new Date().toISOString();
+  const ngay_ket_thuc = endDateStr
+    ? new Date(endDateStr + "T23:59:59").toISOString()
+    : new Date(Date.now() + 30 * 86400000).toISOString();
+
+  const payload = {
+    ma_code,
+    ten_km,
+    loai_giam,
+    gia_tri_giam,
+    don_toi_thieu,
+    ngay_bat_dau,
+    ngay_ket_thuc,
+    so_luot_toi_da,
+  };
+
+  if (editingVoucherId) {
+    const { error } = await sb.from("khuyenmai").update(payload).eq("ma_km", editingVoucherId);
+    if (error) return alert("Lỗi cập nhật khuyến mãi: " + error.message);
+    alert("Đã cập nhật chương trình khuyến mãi!");
+  } else {
+    const ma_km = "KM_" + Date.now().toString().slice(-6);
+    const { error } = await sb.from("khuyenmai").insert({
+      ma_km,
+      ...payload,
+      so_luot_da_dung: 0,
+      trang_thai: "active",
+    });
+    if (error) return alert("Lỗi tạo khuyến mãi (kiểm tra trùng mã code): " + error.message);
+    alert("Đã tạo mã khuyến mãi mới!");
+  }
+
+  editingVoucherId = null;
+  showVoucherForm = false;
+  await reloadVouchersFromSupabase();
+  render();
+}
+
+async function handleToggleVoucher(ma_km, currentStatus) {
+  const nextStatus = currentStatus === "active" ? "inactive" : "active";
+  const { error } = await sb.from("khuyenmai").update({ trang_thai: nextStatus }).eq("ma_km", ma_km);
+  if (error) return alert("Lỗi đổi trạng thái: " + error.message);
+  await reloadVouchersFromSupabase();
+  render();
+}
+
+async function handleDeleteVoucher(ma_km, ma_code) {
+  if (!confirm(`Bạn có chắc muốn xóa mã khuyến mãi "${ma_code}" không?`)) return;
+  const { error } = await sb.from("khuyenmai").delete().eq("ma_km", ma_km);
+  if (error) return alert("Không thể xóa mã này (có thể đã được dùng trong đơn hàng). Hãy bấm 'Ngừng'!");
+  await reloadVouchersFromSupabase();
+  alert("Đã xóa khuyến mãi!");
+  render();
+}
+
+function getCheckoutDiscount(subtotal) {
+  const km = state.appliedVoucher;
+  if (!km || subtotal < Number(km.don_toi_thieu || 0)) {
+    return { discount: 0, finalTotal: subtotal };
+  }
+  const rawDiscount =
+    km.loai_giam === "percent"
+      ? Math.round((subtotal * Number(km.gia_tri_giam)) / 100)
+      : Number(km.gia_tri_giam);
+  const discount = Math.min(subtotal, rawDiscount);
+  return { discount, finalTotal: subtotal - discount };
+}
+
+async function applyCheckoutVoucher() {
+  const inputEl = document.getElementById("checkoutVoucherInput");
+  const code = (inputEl ? inputEl.value : state.voucherInput).trim().toUpperCase();
+  state.voucherInput = code;
+
+  if (!code) {
+    state.voucherFeedback = `<span class="error">Vui lòng nhập mã giảm giá.</span>`;
+    render();
+    return;
+  }
+
+  const subtotal = cartItems().reduce((sum, item) => sum + item.product.price * item.qty, 0);
+  const { data: km } = await sb
+    .from("khuyenmai")
+    .select("*")
+    .eq("ma_code", code)
+    .eq("trang_thai", "active")
+    .maybeSingle();
+
+  if (!km) {
+    state.appliedVoucher = null;
+    state.voucherFeedback = `<span class="error">Mã khuyến mãi không tồn tại hoặc đã ngừng áp dụng.</span>`;
+  } else if (km.ngay_bat_dau && new Date(km.ngay_bat_dau) > new Date()) {
+    state.appliedVoucher = null;
+    state.voucherFeedback = `<span class="error">Mã này chỉ áp dụng từ ngày ${new Date(km.ngay_bat_dau).toLocaleDateString("vi-VN")}.</span>`;
+  } else if (new Date(km.ngay_ket_thuc) < new Date() || Number(km.so_luot_da_dung) >= Number(km.so_luot_toi_da)) {
+    state.appliedVoucher = null;
+    state.voucherFeedback = `<span class="error">Mã khuyến mãi đã hết hạn hoặc hết lượt sử dụng.</span>`;
+  } else if (subtotal < Number(km.don_toi_thieu || 0)) {
+    state.appliedVoucher = null;
+    state.voucherFeedback = `<span class="error">Mã này chỉ áp dụng cho đơn từ ${formatPrice(Number(km.don_toi_thieu))}.</span>`;
+  } else {
+    state.appliedVoucher = km;
+    state.voucherFeedback = `<span style="color:#49784f">Đã áp dụng mã <strong>${km.ma_code}</strong> (${km.ten_km}).</span>`;
+  }
+  render();
+}
+
+function removeCheckoutVoucher() {
+  state.appliedVoucher = null;
+  state.voucherInput = "";
+  state.voucherFeedback = "";
+  render();
+}
+
+// ==========================================
 // TRANG QUẢN TRỊ ADMIN (#admin)
 // ==========================================
 function renderAdmin() {
@@ -876,6 +1180,9 @@ function renderAdmin() {
       (c.phone && c.phone.includes(keyword))
   );
 
+  const editItem = editingCakeId ? products.find((x) => x.id === editingCakeId) : null;
+  const editVoucher = editingVoucherId ? vouchersList.find((v) => v.ma_km === editingVoucherId) : null;
+
   return `
     <section class="page-hero">
       <span class="eyebrow">Hệ thống quản trị</span>
@@ -892,6 +1199,7 @@ function renderAdmin() {
         <button class="filter-button ${state.adminTab === "orders" ? "active" : ""}" data-action="admin-tab" data-tab="orders">Quản lý đơn hàng (${allOrders.length})</button>
         <button class="filter-button ${state.adminTab === "customers" ? "active" : ""}" data-action="admin-tab" data-tab="customers">Quản lý khách hàng (${allCustomers.length})</button>
         <button class="filter-button ${state.adminTab === "products" ? "active" : ""}" data-action="admin-tab" data-tab="products">Danh sách sản phẩm (${products.length})</button>
+        <button class="filter-button ${state.adminTab === "vouchers" ? "active" : ""}" data-action="admin-tab" data-tab="vouchers">Quản lý khuyến mãi (${vouchersList.length})</button>
         <button class="filter-button" data-action="logout" style="color: var(--danger); margin-top: 12px">Đăng xuất</button>
       </aside>
 
@@ -1041,8 +1349,172 @@ function renderAdmin() {
             </div>
           `}
 
+          ` : state.adminTab === "vouchers" ? `
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+            <h2 style="font-family: var(--serif); font-size: 36px; margin: 0">Khuyến Mãi & Mã Giảm Giá</h2>
+            <button type="button" class="primary" style="min-height:44px;padding:0 22px;" onclick="openVoucherEditor(null)">
+              + Thêm khuyến mãi
+            </button>
+          </div>
+
+          ${showVoucherForm ? `
+            <div class="account-card" style="margin-bottom:24px;background:var(--paper-2);">
+              <h3 style="font-family:var(--serif);font-size:24px;margin-top:0;">
+                ${editVoucher ? `Cập nhật mã: ${editVoucher.ma_code}` : "Tạo chương trình khuyến mãi mới"}
+              </h3>
+              <form class="form-grid" onsubmit="handleSaveVoucher(event)">
+                <div class="two-col">
+                  <label>Mã giảm giá (Code) *
+                    <input type="text" id="adminKmCode" class="field" required placeholder="VD: LEOF15" style="text-transform:uppercase;" value="${editVoucher ? editVoucher.ma_code : ""}" />
+                  </label>
+                  <label>Tên chương trình *
+                    <input type="text" id="adminKmName" class="field" required placeholder="VD: Ưu đãi cuối tuần" value="${editVoucher ? editVoucher.ten_km : ""}" />
+                  </label>
+                </div>
+                <div class="two-col">
+                  <label>Hình thức giảm *
+                    <select id="adminKmType" class="field">
+                      <option value="percent" ${editVoucher?.loai_giam === "percent" ? "selected" : ""}>Giảm theo phần trăm (%)</option>
+                      <option value="fixed" ${editVoucher?.loai_giam === "fixed" ? "selected" : ""}>Giảm tiền trực tiếp (VNĐ)</option>
+                    </select>
+                  </label>
+                  <label>Giá trị giảm *
+                    <input type="number" id="adminKmVal" class="field" required min="1" placeholder="VD: 15 hoặc 30000" value="${editVoucher ? editVoucher.gia_tri_giam : ""}" />
+                  </label>
+                </div>
+                <div class="two-col">
+                  <label>Đơn hàng tối thiểu (VNĐ)
+                    <input type="number" id="adminKmMin" class="field" min="0" value="${editVoucher ? editVoucher.don_toi_thieu : 150000}" />
+                  </label>
+                  <label>Số lượt dùng tối đa
+                    <input type="number" id="adminKmLimit" class="field" min="1" value="${editVoucher ? editVoucher.so_luot_toi_da : 100}" />
+                  </label>
+                </div>
+                <div class="two-col">
+                  <label>Ngày bắt đầu *
+                    <input type="date" id="adminKmStart" class="field" required value="${toLocalDateInput(editVoucher?.ngay_bat_dau)}" />
+                  </label>
+                  <label>Ngày kết thúc *
+                    <input type="date" id="adminKmEnd" class="field" required value="${toLocalDateInput(editVoucher?.ngay_ket_thuc || Date.now() + 30 * 86400000)}" />
+                  </label>
+                </div>
+                <div style="display:flex;gap:10px;">
+                  <button type="submit" class="primary">${editVoucher ? "Lưu thay đổi" : "Tạo khuyến mãi"}</button>
+                  <button type="button" class="ghost" onclick="closeVoucherEditor()">Hủy</button>
+                </div>
+              </form>
+            </div>
+          ` : ""}
+
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>Mã Code</th>
+                  <th>Chương trình</th>
+                  <th>Mức giảm</th>
+                  <th>Đơn tối thiểu</th>
+                  <th>Lượt dùng</th>
+                  <th>Trạng thái</th>
+                  <th>Thao tác</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${!vouchersList.length ? `
+                  <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:28px;">Chưa có chương trình khuyến mãi nào.</td></tr>
+                ` : vouchersList.map((v) => {
+                  const isActive = v.trang_thai === "active";
+                  return `
+                    <tr>
+                      <td><strong>${v.ma_code}</strong></td>
+                      <td>
+                        <strong>${v.ten_km}</strong><br />
+                        <small style="color:var(--muted)">
+                          Từ: ${v.ngay_bat_dau ? new Date(v.ngay_bat_dau).toLocaleDateString("vi-VN") : "—"} · 
+                          Đến: ${new Date(v.ngay_ket_thuc).toLocaleDateString("vi-VN")}
+                        </small>
+                      </td>
+                      <td><strong>${v.loai_giam === "percent" ? `${v.gia_tri_giam}%` : formatPrice(Number(v.gia_tri_giam))}</strong></td>
+                      <td>${formatPrice(Number(v.don_toi_thieu || 0))}</td>
+                      <td>${v.so_luot_da_dung || 0} / ${v.so_luot_toi_da}</td>
+                      <td>
+                        <span class="status-badge ${isActive ? "status-completed" : "status-cancelled"}">
+                          ${isActive ? "Đang chạy" : "Đã ngừng"}
+                        </span>
+                      </td>
+                      <td>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                          <button type="button" class="btn-keep-outline" onclick="openVoucherEditor('${v.ma_km}')">Sửa</button>
+                          <button type="button" class="btn-keep-outline" onclick="handleToggleVoucher('${v.ma_km}', '${v.trang_thai}')">
+                            ${isActive ? "Ngừng" : "Kích hoạt"}
+                          </button>
+                          <button type="button" class="btn-danger-outline" onclick="handleDeleteVoucher('${v.ma_km}', '${v.ma_code}')">Xóa</button>
+                        </div>
+                      </td>
+                    </tr>
+                  `;
+                }).join("")}
+              </tbody>
+            </table>
+          </div>
+
         ` : `
-          <h2 style="font-family: var(--serif); font-size: 36px; margin-top: 0">Danh Mục Bánh Hiện Có</h2>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:20px;">
+            <h2 style="font-family: var(--serif); font-size: 36px; margin: 0">Danh Mục Bánh Hiện Có</h2>
+            <button type="button" class="primary" style="min-height:44px;padding:0 22px;" onclick="openCakeEditor(null)">
+              + Thêm bánh mới
+            </button>
+          </div>
+
+          ${showCakeForm ? `
+            <div class="account-card" style="margin-bottom:24px;background:var(--paper-2);">
+              <h3 style="font-family:var(--serif);font-size:24px;margin-top:0;">
+                ${editItem ? `Chỉnh sửa: ${editItem.name}` : "Thêm bánh mới vào thực đơn"}
+              </h3>
+              <form class="form-grid" onsubmit="handleSaveCake(event)">
+                <div class="two-col">
+                  <label>Tên bánh *
+                    <input type="text" id="adminCakeName" class="field" required value="${editItem ? editItem.name : ""}" />
+                  </label>
+                  <label>Danh mục *
+                    <select id="adminCakeCategory" class="field">
+                      <option value="Bánh mì & Viennoiserie" ${editItem?.category === "Bánh mì & Viennoiserie" ? "selected" : ""}>Bánh mì & Viennoiserie</option>
+                      <option value="Bánh nhỏ & Pastry" ${editItem?.category === "Bánh nhỏ & Pastry" ? "selected" : ""}>Bánh nhỏ & Pastry</option>
+                      <option value="Bánh nguyên cái" ${editItem?.category === "Bánh nguyên cái" ? "selected" : ""}>Bánh nguyên cái</option>
+                      <option value="Tart & Quiche" ${editItem?.category === "Tart & Quiche" ? "selected" : ""}>Tart & Quiche</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="two-col">
+                  <label>Khối lượng
+                    <input type="text" id="adminCakeWeight" class="field" placeholder="VD: 150g" value="${editItem ? editItem.weight : ""}" />
+                  </label>
+                  <label>Đơn giá (VNĐ) *
+                    <input type="number" id="adminCakePrice" class="field" required min="0" value="${editItem ? editItem.price : ""}" />
+                  </label>
+                </div>
+                <div class="two-col">
+                  <label>Tải ảnh từ máy tính
+                    <input type="file" id="adminCakeImgFile" accept="image/*" class="field" style="padding:12px;" />
+                  </label>
+                  <label>Hoặc đường dẫn ảnh
+                    <input type="text" id="adminCakeImgUrl" class="field" value="${editItem ? editItem.image : "./public/assets/placeholder.jpg"}" />
+                  </label>
+                </div>
+                <label>Nhãn hiển thị (cách nhau bằng dấu phẩy)
+                  <input type="text" id="adminCakeTags" class="field" placeholder="Nổi bật, Mới, Bán chạy nhất" value="${editItem ? (editItem.tags || []).join(", ") : ""}" />
+                </label>
+                <label>Mô tả chi tiết
+                  <textarea id="adminCakeDesc" style="min-height:80px;">${editItem ? (editItem.description || "") : ""}</textarea>
+                </label>
+                <div style="display:flex;gap:10px;">
+                  <button type="submit" class="primary">${editItem ? "Lưu thay đổi" : "Lưu bánh mới"}</button>
+                  <button type="button" class="ghost" onclick="closeCakeEditor()">Hủy</button>
+                </div>
+              </form>
+            </div>
+          ` : ""}
+
           <div class="admin-table-wrap">
             <table class="admin-table">
               <thead>
@@ -1052,6 +1524,7 @@ function renderAdmin() {
                   <th>Khối lượng</th>
                   <th>Đơn giá</th>
                   <th>Nhãn</th>
+                  <th>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -1059,9 +1532,15 @@ function renderAdmin() {
                   <tr>
                     <td><strong>${p.name}</strong></td>
                     <td>${p.category}</td>
-                    <td>${p.weight}</td>
+                    <td>${p.weight || ""}</td>
                     <td>${formatPrice(p.price)}</td>
-                    <td>${p.tags.join(", ")}</td>
+                    <td>${(p.tags || []).join(", ")}</td>
+                    <td>
+                      <div style="display:flex;gap:8px;">
+                        <button type="button" class="btn-keep-outline" onclick="openCakeEditor('${p.id}')">Sửa</button>
+                        <button type="button" class="btn-danger-outline" onclick="handleDeleteCake('${p.id}', '${p.name.replace(/'/g, "\\'")}')">Xóa</button>
+                      </div>
+                    </td>
                   </tr>
                 `).join("")}
               </tbody>
@@ -1095,6 +1574,17 @@ async function finalizeOrder(orderData) {
   state.orders.unshift(orderData);
   state.lastOrderCode = orderData.orderCode;
   state.pendingBankOrder = null;
+  if (state.appliedVoucher) {
+    const usedKm = state.appliedVoucher;
+    await sb
+      .from("khuyenmai")
+      .update({ so_luot_da_dung: Number(usedKm.so_luot_da_dung || 0) + 1 })
+      .eq("ma_km", usedKm.ma_km);
+    state.appliedVoucher = null;
+    state.voucherInput = "";
+    state.voucherFeedback = "";
+    await reloadVouchersFromSupabase();
+  }
   state.cart.clear();
   state.accountTab = "orders";
   location.hash = "checkout-complete";
@@ -1167,6 +1657,7 @@ function renderCheckout() {
 
   const items = cartItems();
   const subtotal = items.reduce((sum, item) => sum + item.product.price * item.qty, 0);
+  const { discount, finalTotal } = getCheckoutDiscount(subtotal);
   return `
     <section class="checkout">
       <h1>Thanh toán</h1>
@@ -1203,9 +1694,24 @@ function renderCheckout() {
         <aside class="order-summary">
           <h2>Đơn hàng của bạn</h2>
           ${items.length ? items.map(({ product, qty }) => `<div class="summary-item"><img src="${productImage(product)}" onerror="handleImgError(this, '${product.id}')" alt="${product.name}" /><div><strong>${product.name}</strong><br />x${qty}</div><span>${formatPrice(product.price * qty)}</span></div>`).join("") : `<p>Giỏ hàng đang trống.</p>`}
+
+          <div style="margin: 16px 0; padding: 14px 0; border-top: 1px dashed var(--line); border-bottom: 1px dashed var(--line);">
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="checkoutVoucherInput" class="field" style="min-height:42px; text-transform:uppercase;"
+                placeholder="Nhập mã giảm giá..." value="${state.appliedVoucher ? state.appliedVoucher.ma_code : state.voucherInput}"
+                ${state.appliedVoucher ? "disabled" : ""} />
+              ${state.appliedVoucher
+                ? `<button type="button" class="btn-danger-outline" style="white-space:nowrap;" onclick="removeCheckoutVoucher()">Gỡ mã</button>`
+                : `<button type="button" class="outline-button" style="min-height:42px; padding:0 16px; white-space:nowrap;" onclick="applyCheckoutVoucher()">Áp dụng</button>`
+              }
+            </div>
+            ${state.voucherFeedback ? `<div style="font-size:13px; margin-top:6px;">${state.voucherFeedback}</div>` : ""}
+          </div>
+
           <div class="summary-row"><span>Tạm tính</span><span>${formatPrice(subtotal)}</span></div>
+          ${discount > 0 ? `<div class="summary-row" style="color:#49784f"><span>Giảm giá (${state.appliedVoucher.ma_code})</span><span>−${formatPrice(discount)}</span></div>` : ""}
           <div class="summary-row"><span>Giao hàng</span><span>Liên hệ báo phí</span></div>
-          <div class="summary-row summary-total"><span>Tổng cộng</span><strong>${formatPrice(subtotal)}</strong></div>
+          <div class="summary-row summary-total"><span>Tổng cộng</span><strong>${formatPrice(finalTotal)}</strong></div>
           <button class="primary full" data-action="place-order">✓ Đặt hàng</button>
           <p class="terms">Bằng cách đặt hàng, bạn đồng ý với điều khoản của chúng tôi.</p>
         </aside>
@@ -1500,7 +2006,8 @@ document.body.addEventListener("click", async (event) => {
         price: product.price,
         qty,
       }));
-      const total = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+      const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+      const { finalTotal: total } = getCheckoutDiscount(subtotal);
       const now = new Date();
       const orderCode = `LEOF-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-${String(state.orders.length + 1).padStart(3, "0")}`;
 
@@ -1644,7 +2151,7 @@ document.body.addEventListener("change", async (event) => {
 
 document.body.addEventListener("submit", async (event) => {
   const form = event.target.closest("form");
-  if (!form) return;
+  if (!form || !form.dataset.form) return;
   event.preventDefault();
   if (!validateForm(form)) return;
 
